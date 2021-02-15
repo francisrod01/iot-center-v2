@@ -33,6 +33,9 @@ import {flux, fluxDuration, InfluxDB} from '@influxdata/influxdb-client'
 import {queryTable} from '../util/queryTable'
 import {VIRTUAL_DEVICE} from '../App'
 
+import {MapContainer, TileLayer} from 'react-leaflet'
+import AntPath from '../util/antPathWrapper'
+
 interface DeviceConfig {
   influx_url: string
   influx_org: string
@@ -239,6 +242,7 @@ const DashboardPage: FunctionComponent<
     setXDomain(getXDomainFromTable(deviceData?.measurementsTable))
 
   const isVirtualDevice = deviceId === VIRTUAL_DEVICE
+  const measurementsTable = deviceData?.measurementsTable
 
   // fetch device configuration and data
   useEffect(() => {
@@ -390,6 +394,63 @@ const DashboardPage: FunctionComponent<
     </>
   ) : undefined
 
+  const geo =
+    measurementsTable && measurementsTable?.length
+      ? (() => {
+          const latCol = measurementsTable.getColumn(
+            'Lat',
+            'number'
+          ) as number[]
+          const lonCol = measurementsTable.getColumn(
+            'Lon',
+            'number'
+          ) as number[]
+
+          const track: [number, number][] =
+            !lonCol || !latCol
+              ? []
+              : latCol.map((lat: number, i: number) => {
+                  const lon = lonCol[i]
+                  return [lat, lon] as [number, number]
+                })
+
+          // Made from basic react-leaflet example https://react-leaflet.js.org/docs/start-setup
+          return (
+            <>
+              <Row>
+                <Col sm={24}>
+                  <MapContainer
+                    style={{width: '100%', height: '500px'}}
+                    center={track[track.length - 1]}
+                    zoom={6}
+                    scrollWheelZoom={false}
+                  >
+                    <TileLayer
+                      attribution='&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors'
+                      url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                    <AntPath
+                      positions={track}
+                      options={{
+                        delay: 400,
+                        dashArray: [10, 20],
+                        weight: 5,
+                        color: '#0000FF',
+                        pulseColor: '#FFFFFF',
+                        paused: false,
+                        reverse: false,
+                        hardwareAccelerated: true,
+                      }}
+                    />
+                  </MapContainer>
+                  <Divider />
+                </Col>
+              </Row>
+            </>
+          )
+        })()
+      : undefined
+
   const renderPlot = (
     lineDefinition: Partial<LineLayerConfig> | undefined,
     table: GiraffeTable,
@@ -423,42 +484,42 @@ const DashboardPage: FunctionComponent<
     )
   }
 
-  const plots = deviceData?.measurementsTable?.length
-    ? (() => {
-        const table = deviceData.measurementsTable as GiraffeTable
-        const measurementsWithValues = measurementsDefinitions.filter(
-          ({column}) => table.getColumn(column)
-        )
-        const measurementsNoValues = measurementsDefinitions.filter(
-          ({column}) => !table.getColumn(column)
-        )
+  const plots =
+    measurementsTable && measurementsTable?.length
+      ? (() => {
+          const measurementsWithValues = measurementsDefinitions.filter(
+            ({column}) => measurementsTable.getColumn(column)
+          )
+          const measurementsNoValues = measurementsDefinitions.filter(
+            ({column}) => !measurementsTable.getColumn(column)
+          )
 
-        return (
-          <>
-            <Collapse
-              defaultActiveKey={measurementsWithValues.map((_, i) => i)}
-            >
-              {measurementsWithValues.map(({line, title, column}, i) => (
-                <CollapsePanel key={i} header={title}>
-                  {renderPlot(line, table, column)}
-                </CollapsePanel>
-              ))}
-            </Collapse>
-            {measurementsNoValues.length ? (
-              <Collapse>
-                {measurementsNoValues.map(({title}, i) => (
-                  <CollapsePanel
-                    key={i}
-                    disabled={true}
-                    header={`${title} - No data`}
-                  />
+          return (
+            <>
+              <Collapse
+                defaultActiveKey={measurementsWithValues.map((_, i) => i)}
+              >
+                {measurementsWithValues.map(({line, title, column}, i) => (
+                  <CollapsePanel key={i} header={title}>
+                    {renderPlot(line, measurementsTable, column)}
+                  </CollapsePanel>
                 ))}
               </Collapse>
-            ) : undefined}
-          </>
-        )
-      })()
-    : undefined
+              {measurementsNoValues.length ? (
+                <Collapse>
+                  {measurementsNoValues.map(({title}, i) => (
+                    <CollapsePanel
+                      key={i}
+                      disabled={true}
+                      header={`${title} - No data`}
+                    />
+                  ))}
+                </Collapse>
+              ) : undefined}
+            </>
+          )
+        })()
+      : undefined
 
   const timeOptions: {label: string; value: string}[] = [
     {label: 'Past 5m', value: '-5m'},
@@ -548,6 +609,7 @@ const DashboardPage: FunctionComponent<
       {deviceData?.measurementsTable?.length ? (
         <>
           {gauges}
+          {geo}
           {plots}
         </>
       ) : (

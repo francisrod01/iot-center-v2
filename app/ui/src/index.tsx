@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom'
 import App from './App'
 import * as serviceWorker from './serviceWorker'
 import {BrowserRouter} from 'react-router-dom'
+// ! important to load leaflet CSS to fix tile positioning !
+import 'leaflet/dist/leaflet.css'
 
 ReactDOM.render(
   <BrowserRouter>
